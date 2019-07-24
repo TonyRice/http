@@ -31,7 +31,7 @@ class ExecHandler(SentryMixin, RequestHandler):
 
     def resolve_by_uri(self, path):
         """
-        A http request to `/*` will resolve to one listener on that channel.
+        The path /* will match all uris in the http request
         """
         resolve = self.application.router.find_handler(self.request)
 
@@ -56,6 +56,7 @@ class ExecHandler(SentryMixin, RequestHandler):
             'data': {
                 'uri': self.request.uri,
                 'path': self.request.path,
+                'path_params': resolve.paths,
                 'headers': dict(self.request.headers),
             },
         }

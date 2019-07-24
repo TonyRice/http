@@ -4,11 +4,15 @@ API gateway server for executing Stories via HTTP.
 
 ```coffee
 http server as server
-  when server listen method:'get' path:'/' as r
+  when server listen method:"get" path:"/user/:name/*" as r
     log info msg:r.body
     log info msg:r.headers
-    log info msg:r.headers['Host']
-    r write data:'Hello World'
+    log info msg:r.headers["Host"]
+    log info msg:r.path_params
+    log info msg:r.path_params["name"]
+    log info msg:r.path_params["wildcard"]
+    
+    r write data:"Hello {r.path_params["name"]}"
     r status code:200
     r finish
 ```
@@ -18,6 +22,15 @@ $ curl https://foobar.storyscriptapp.com/
 Hello World
 ```
 
+## Routing
+```coffee
+  path:'/pages/new'               # Matches ONLY /pages/new
+  path:'/pages/:id'               # Matches /pages/25
+  path:'/pages/:id/*'             # Matches /pages/10/any/thing/else
+  path:'/page*'                   # Matches /pages/10 or /page_any_thing/else
+  path:'/pages/:id/*/:source/end' # Matches /pages/9/any/thing/some_source/end
+  path:'/*'                       # Matches everything
+````
 
 ## Development
 

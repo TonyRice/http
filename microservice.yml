@@ -70,6 +70,9 @@ actions:
             headers:
               help: The HTTP headers of the incoming HTTP request
               type: map
+            path_params:
+              help: The parsed path parameters of the HTTP request
+              type: map
             query_params:
               help: The parsed query parameters of the HTTP request
               type: map
