@@ -213,8 +213,16 @@ class ExecHandler(SentryMixin, RequestHandler):
             ~finish~ will not be passed since it will close the connection
         """
 
-        # If the response from the engine is binary (see _on_headers_receive),
-        # then the response must be sent to the client directly.
+        # If we receive a chunk that beings with the above header,
+        # we want to be sure to upgrade the request to response_passthrough
+        # ensuring that data gets processed properly. If we send something
+        # like set_header, before we send the binary data, it'll break the request
+        # without this header.
+        if len(chunk) > 12 and chunk[0:12] == b'\n\nBEGIN DATA' and \
+                not self.response_passthrough:
+
+            self.response_passthrough = True
+            chunk = chunk[12:]
 
         if self.response_passthrough:
             self.write(chunk)
