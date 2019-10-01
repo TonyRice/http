@@ -21,6 +21,10 @@ from .FourOhFour import FourOhFour
 File = namedtuple('File', ['name', 'body', 'content_type', 'upload_name'])
 CLOUD_EVENTS_FILE_KEY = '_ce_payload'
 
+RAW_DATA_BEGIN = b'\n\nBEGIN\n'
+RAW_DATA_END = b'\n\nBEGIN\n'
+RAW_DATA_FLUSH = b'\n\nFLUSH\n'
+
 
 class ExecHandler(SentryMixin, RequestHandler):
     buffer = bytearray()
@@ -218,75 +222,82 @@ class ExecHandler(SentryMixin, RequestHandler):
         # ensuring that data gets processed properly. If we send something
         # like set_header, before we send the binary data, it'll break the request
         # without this header.
-        if len(chunk) > 12 and chunk[0:12] == b'\n\nBEGIN DATA' and \
-                not self.response_passthrough:
 
+        # check for raw binary instructions
+        if chunk == RAW_DATA_BEGIN:
             self.response_passthrough = True
-            chunk = chunk[12:]
-
-        if self.response_passthrough:
+            return
+        elif chunk == RAW_DATA_FLUSH:
+            # this allows us to call flush, while we write raw data.
+            self.flush()
+            self.response_passthrough = False
+            return
+        elif chunk == RAW_DATA_END:
+            self.response_passthrough = False
+            return
+        elif self.response_passthrough:
             self.write(chunk)
             return
+        else:
+            # Read `chunk` byte by byte and add it to the buffer.
+            # When a byte is \n, then parse everything in the buffer as string,
+            # and interpret the resulting JSON string.
 
-        # Read `chunk` byte by byte and add it to the buffer.
-        # When a byte is \n, then parse everything in the buffer as string,
-        # and interpret the resulting JSON string.
-
-        instructions = []
-        for b in chunk:
-            if b == 0x0A:  # 0x0A is an ASCII/UTF-8 new line.
-                instructions.append(self.buffer.decode('utf-8'))
-                self.buffer.clear()
-            else:
-                self.buffer.append(b)
-
-        # If we have any new instructions, execute them.
-        for ins in instructions:
-            ins = json.loads(ins)
-            command = ins['command']
-            if command == 'write':
-                if ins['data'].get('content') is None:
-                    self.write('null')
+            instructions = []
+            for b in chunk:
+                if b == 0x0A:  # 0x0A is an ASCII/UTF-8 new line.
+                    instructions.append(self.buffer.decode('utf-8'))
+                    self.buffer.clear()
                 else:
-                    self.write(ins['data']['content'])
-                if ins['data'].get('flush'):
-                    self.flush()
-            elif command == 'set_status':
-                self.set_status(ins['data']['code'])
-            elif command == 'set_cookie':
-                # name, value, domain, expires, path, expires_days, secure
-                if ins['data'].pop('secure', False):
-                    self.set_cookie(**ins['data'])
-                else:
-                    self.set_secure_cookie(**ins['data'])
-            elif command == 'clear_cookie':
-                # name, domain, path
-                self.clear_cookie(**ins['data'])
-            elif command == 'clear_all_cookie':
-                # domain, path
-                self.clear_cookie(**ins['data'])
-            elif command == 'set_header':
-                self.set_header(ins['data']['key'], ins['data']['value'])
-            elif command == 'flush':
-                self.flush()
-            elif command == 'redirect':
-                redir_url = ins['data']['url']
-                params = ins['data'].get('query')
-                if isinstance(params, dict):
-                    # Convert boolean True/False to true/false as strings,
-                    # because of Python's silly-ness.
-                    self.handle_boolean_values(params)
-                    query_string = urlencode(params)
-                    if '?' in redir_url:
-                        redir_url = f'{redir_url}&{query_string}'
+                    self.buffer.append(b)
+
+            # If we have any new instructions, execute them.
+            for ins in instructions:
+                ins = json.loads(ins)
+                command = ins['command']
+                if command == 'write':
+                    if ins['data'].get('content') is None:
+                        self.write('null')
                     else:
-                        redir_url = f'{redir_url}?{query_string}'
-                self.redirect(redir_url)
-            elif command == 'finish':
-                # can we close quicker here?
-                break
-            else:
-                raise NotImplementedError(f'{command} is not implemented!')
+                        self.write(ins['data']['content'])
+                    if ins['data'].get('flush'):
+                        self.flush()
+                elif command == 'set_status':
+                    self.set_status(ins['data']['code'])
+                elif command == 'set_cookie':
+                    # name, value, domain, expires, path, expires_days, secure
+                    if ins['data'].pop('secure', False):
+                        self.set_cookie(**ins['data'])
+                    else:
+                        self.set_secure_cookie(**ins['data'])
+                elif command == 'clear_cookie':
+                    # name, domain, path
+                    self.clear_cookie(**ins['data'])
+                elif command == 'clear_all_cookie':
+                    # domain, path
+                    self.clear_cookie(**ins['data'])
+                elif command == 'set_header':
+                    self.set_header(ins['data']['key'], ins['data']['value'])
+                elif command == 'flush':
+                    self.flush()
+                elif command == 'redirect':
+                    redir_url = ins['data']['url']
+                    params = ins['data'].get('query')
+                    if isinstance(params, dict):
+                        # Convert boolean True/False to true/false as strings,
+                        # because of Python's silly-ness.
+                        self.handle_boolean_values(params)
+                        query_string = urlencode(params)
+                        if '?' in redir_url:
+                            redir_url = f'{redir_url}&{query_string}'
+                        else:
+                            redir_url = f'{redir_url}?{query_string}'
+                    self.redirect(redir_url)
+                elif command == 'finish':
+                    # can we close quicker here?
+                    break
+                else:
+                    raise NotImplementedError(f'{command} is not implemented!')
 
     def handle_boolean_values(self, params: dict):
         for k, v in params.items():
