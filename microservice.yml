@@ -35,6 +35,16 @@ actions:
       body:
         type: any
         in: requestBody
+      full:
+        type: bool
+        help: |
+          Returns the full HTTP response including headers, and response body
+        in: requestBody
+      decode:
+        type: bool
+        help: |
+          Attempts to decode raw binary data returned within the response body
+        in: requestBody
     output:
       type: any
   server:
@@ -86,7 +96,7 @@ actions:
                 use_event_conn: true
               arguments:
                 content:
-                  type: string
+                  type: any
                   in: responseBody
                   required: true
                 flush:
