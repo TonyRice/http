@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 import logging
-from logging import Logger
 import os
 import re
 import pickle
 from collections import namedtuple
-from tornado.routing import Router, Matcher, RuleRouter, Rule, PathMatches
+from tornado.routing import Router, Matcher, RuleRouter, Rule, PathMatches, _unquote_or_none
 
 from . import Config
 
@@ -13,75 +12,96 @@ Resolve = namedtuple('Resolve', ['endpoint', 'paths'])
 
 Route = namedtuple('Route', ['host', 'path', 'endpoint'])
 
+
 path_re = re.compile(
     r"""
     (?P<wildcard>\*+)              # wildcard ie: /* or /end* or /start/*/end
-    |/:(?P<var>[a-zA-Z0-9_]+)  # path variable ie: /user/:id
-    """, re.VERBOSE)
+    |/:(?P<var>[a-zA-Z0-9_]+)
+    |/(?P<path>[a-zA-Z0-9_]+)# path variable ie: /user/:id
+    """,
+    re.VERBOSE,
+)
+
+# this is used to match "simple paths, and attempt to
+# match without regex to speed up processing
+path_matcher = re.compile("^([A-Za-z0-9-._~()'!:@,;_/]+)$")
+
+match_wild_re = r"(?P<wildcard>[A-Za-z0-9-._~()'!*:@,;/]+)?"
 
 
-def dict_decode_values(_dict):
-    """
-    {'foo': b'bar'} => {'foo': 'bar'}
-    """
-    return {
-        key: value.decode('utf-8') if value is not None else None
-        for key, value in _dict.items()
-    }
+def match_var_re(var_name):
+    return r"/(?P<%s>[A-Za-z0-9-._~()'!*:@,;]+)?" % var_name
 
 
-def build_match_regex(path):
+def build_route_matcher(path):
     """
     Parses the provided path and returns the regular expression
     described by the path.
     """
 
-    def match_var_re(var_name):
-        return r"/(?P<%s>[A-Za-z0-9-._~()'!*:@,;]+)" % var_name
+    if path is None:
+        return None
 
-    # match_wild_re = r"(?:([A-Za-z0-9-._~()'!*:@,;/]+))?"
-    match_wild_re = r"(?P<wildcard>[A-Za-z0-9-._~()'!*:@,;/]+)?"
-
-    pos = 0
-    end = len(path)
     match_regex_parts = []
     used_names = set()
-    wildcard_used = False
 
-    if not path or path[0] is not "/":
-        raise ValueError("path must begin with /")
+    if not path or (path[0] != "/" and path[0] != "*"):
+        raise ValueError("path must begin with / or *")
 
-    while pos < end:
-        m = path_re.match(path, pos)
-        if m is None:
-            char = path[pos]
-            if char in " :*":
-                raise ValueError("invalid path segment contains unexpected character %s." % char)
-            if not (pos == end - 1 and char in "/"):
-                match_regex_parts.append(char)
-            pos = pos + 1
-            continue
+    # If we are attempting to match a simple path, let's go
+    # ahead and return the path. This will tell the matcher
+    # to avoid regex matching if the path is the same.
 
-        g = m.groupdict()
-        if g['wildcard']:
-            if match_regex_parts and "?P<" in match_regex_parts[-1]:
-                raise ValueError("path param segment %s cannot contain wildcard *" % match_regex_parts[-1])
-            if wildcard_used:
-                raise ValueError("wildcard * used more than once")
-            match_regex_parts.append(match_wild_re)
-            wildcard_used = True
-        else:
-            var = g["var"]
-            if var.lower() == "wildcard":
-                raise ValueError("path variable name :wildcard is reserved")
-            if var in used_names:
-                raise ValueError("path variable %r used more than once." % var)
-            match_regex_parts.append(match_var_re(var))
-            used_names.add(var)
+    path_exact = path_matcher.match(path)
+    if path_exact is not None and \
+            path_exact[0] is path:
+        return path
 
-        pos = m.end()
+    if path == "/*" or path == "*":
+        match_regex_parts.append(match_wild_re)
+    else:
+        count = 0
+        for m in path_re.findall(path):
+            count = count + 1
+            if m[0] is not '':
+                # wildcard
 
-    return re.compile(r"^%s/?$" % r"".join(match_regex_parts))
+                if match_wild_re in match_regex_parts:
+                    raise ValueError("wildcard * used more than once")
+
+                match_regex_parts.append(match_wild_re)
+            elif m[1] is not '':
+                # path variables
+
+                var = m[1]
+                if var in used_names:
+                    raise ValueError("path variable %r used more than once." % var)
+                if var.lower() == "wildcard":
+                    raise ValueError("path variable name :wildcard is reserved")
+
+                match_regex_parts.append(match_var_re(var))
+                used_names.add(var)
+            elif m[2] is not '':
+                # regular path
+                match_regex_parts.append(f'/{m[2].replace("/", "")}')
+
+    # we utilize this so we do not cause any errors
+    match_regex_parts.append(r"(?P<endpath>/)?")
+
+    return re.compile(r"^%s$" % r"".join(match_regex_parts))
+
+
+def dict_decode_values(_dict):
+    """
+    {'foo': b'bar', 'boo': None} => {'foo': 'bar'}
+    """
+
+    values = {}
+    for key, value in _dict.items():
+        if value is not None:
+            values[key] = value.decode()
+
+    return values
 
 
 class CustomRouter(Router):
@@ -112,12 +132,47 @@ class HostAndPathMatches(PathMatches):
 
     def __init__(self, host, path_pattern):
         super().__init__(path_pattern)
+        self.path_pattern = path_pattern
         self.host = host
+        self.match_cache = {}
 
     def match(self, request):
-        # Truncate the ".storyscriptapp.com" from "foo.asyncyapp.com"
-        if request.host[:-(Config.PRIMARY_DOMAIN_LEN + 1)] == self.host:
-            return super().match(request)
+
+        # Truncate the ".storyscriptapp.com" from "foo.asyncyapp.com" and
+        # ignore ports for local debugging
+        host = request.host.split(":")[0]
+
+        if host[:-(Config.PRIMARY_DOMAIN_LEN + 1)] == self.host.split(":")[0]:
+
+            # This avoids the need for regex when the
+            # path_pattern is exactly the same as the
+            # request path.
+            safe_path = request.path.split("?")[0]
+            safe_pattern = str(self.path_pattern)
+
+            if safe_path in safe_pattern:
+                if safe_path == safe_pattern:
+                    return {}
+                elif safe_pattern.endswith('/') and \
+                        safe_pattern.startswith(safe_path) and \
+                        not safe_path.endswith("/") and \
+                        safe_pattern == (safe_path + '/'):
+                    self.match_cache[request.path] = {}
+
+                    return {}
+
+            # below we override the super, and implement
+            # our own map based cache. This helps us
+            # save a few ms from caching
+            if request.path in self.match_cache:
+                return self.match_cache[request.path]
+
+            value = super().match(request)
+
+            # this will make life a lot easier when speding data up
+            self.match_cache[request.path] = value
+
+            return value
 
         return None
 
@@ -139,32 +194,35 @@ class Router(RuleRouter):
             self._rebuild()
 
     def register(self, host, method, path, endpoint):
-        try:
-            match_regex = build_match_regex(path)
-        except ValueError:
-            self.logger.exception(f'Cannot add route {method} {host} with malformed path {path}')
-            return
-
         self.logger.info(f'Adding route {method} {host} {path} -> {endpoint}')
-        self._cache.setdefault(method, dict()) \
-            .update({Route(host, path, endpoint): match_regex})
+        try:
+            route_matcher = build_route_matcher(path)
+        except ValueError:
+            self.logger.exception(
+                f'Cannot add route {method} {host} with malformed path {path}'
+            )
+            return
+        self._cache.setdefault(method, {}).update(
+            {Route(host, path, endpoint): route_matcher}
+        )
         self._rebuild()
 
     def unregister(self, host, method, path, endpoint):
-        self._cache.get(method, dict()) \
-            .pop((host, path, endpoint), None)
+        self._cache.get(method, {}).pop((host, path, endpoint), None)
         self._rebuild()
 
     def _rebuild(self):
-        """Resolves a uri to the Story and line number to execute."""
+        """
+        Resolves a uri to the Story and line number to execute.
+        """
         method_rules = []
         for method, routes in self._cache.items():
-            rules = [
-                Rule(
+            rules = []
+            for route, match_regex in routes.items():
+                rules.append(Rule(
                     HostAndPathMatches(route.host, match_regex),
-                    CustomRouter(route.endpoint)
-                ) for route, match_regex in routes.items()
-            ]
+                    CustomRouter(route.endpoint),
+                ))
             # create a new rule by method mapping to many rule by path
             method_rules.append(Rule(MethodMatches(method), RuleRouter(rules)))
 
