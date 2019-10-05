@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
-import re
 import pickle
+import re
 from collections import namedtuple
-from tornado.routing import Router, Matcher, RuleRouter, Rule, PathMatches, _unquote_or_none
+
+from tornado.routing import Matcher, \
+    PathMatches, Router, Rule, RuleRouter
 
 from . import Config
 
@@ -15,22 +17,22 @@ Route = namedtuple('Route', ['host', 'path', 'endpoint'])
 
 path_re = re.compile(
     r"""
-    (?P<wildcard>\*+)              # wildcard ie: /* or /end* or /start/*/end
-    |/:(?P<var>[a-zA-Z0-9_]+)
-    |/(?P<path>[a-zA-Z0-9_]+)# path variable ie: /user/:id
+    (\*+)              # wildcard ie: /* or /end* or /start/*/end
+    |/:([a-zA-Z0-9_]+)
+    |/([a-zA-Z0-9_]+)# path variable ie: /user/:id
     """,
     re.VERBOSE,
 )
 
 # this is used to match "simple paths, and attempt to
 # match without regex to speed up processing
-path_matcher = re.compile("^([A-Za-z0-9-._~()'!:@,;_/]+)$")
+path_matcher = re.compile('^([A-Za-z0-9-._~()\'!@,;_/]+)$')
 
-match_wild_re = r"(?P<wildcard>[A-Za-z0-9-._~()'!*:@,;/]+)?"
+match_wild_re = r'(?P<wildcard>[A-Za-z0-9-._~()\'!*:@,;_/]+)?'
 
 
 def match_var_re(var_name):
-    return r"/(?P<%s>[A-Za-z0-9-._~()'!*:@,;]+)?" % var_name
+    return r'/(?P<%s>[A-Za-z0-9-._~()\'!*:@,;]+)?' % var_name
 
 
 def build_route_matcher(path):
@@ -45,8 +47,8 @@ def build_route_matcher(path):
     match_regex_parts = []
     used_names = set()
 
-    if not path or (path[0] != "/" and path[0] != "*"):
-        raise ValueError("path must begin with / or *")
+    if not path or (path[0] != '/' and path[0] != '*'):
+        raise ValueError('path must begin with / or *')
 
     # If we are attempting to match a simple path, let's go
     # ahead and return the path. This will tell the matcher
@@ -57,7 +59,7 @@ def build_route_matcher(path):
             path_exact[0] is path:
         return path
 
-    if path == "/*" or path == "*":
+    if path == '/*' or path == '*':
         match_regex_parts.append(match_wild_re)
     else:
         count = 0
@@ -67,18 +69,23 @@ def build_route_matcher(path):
                 # wildcard
 
                 if match_wild_re in match_regex_parts:
-                    raise ValueError("wildcard * used more than once")
+                    raise ValueError('wildcard * used more than once')
 
                 match_regex_parts.append(match_wild_re)
             elif m[1] is not '':
                 # path variables
 
                 var = m[1]
-                if var in used_names:
-                    raise ValueError("path variable %r used more than once." % var)
-                if var.lower() == "wildcard":
-                    raise ValueError("path variable name :wildcard is reserved")
 
+                if var.lower() == 'wildcard':
+                    raise ValueError(
+                        'path variable name :wildcard is reserved'
+                    )
+
+                if var in used_names:
+                    raise ValueError(
+                        'path variable %r used more than once.' % var
+                    )
                 match_regex_parts.append(match_var_re(var))
                 used_names.add(var)
             elif m[2] is not '':
@@ -86,9 +93,9 @@ def build_route_matcher(path):
                 match_regex_parts.append(f'/{m[2].replace("/", "")}')
 
     # we utilize this so we do not cause any errors
-    match_regex_parts.append(r"(?P<endpath>/)?")
+    match_regex_parts.append(r'(?P<endpath>/)?')
 
-    return re.compile(r"^%s$" % r"".join(match_regex_parts))
+    return re.compile(r'^%s$' % r''.join(match_regex_parts))
 
 
 def dict_decode_values(_dict):
@@ -116,7 +123,9 @@ class CustomRouter(Router):
 
 
 class MethodMatches(Matcher):
-    """Matches requests method"""
+    """
+    Matches requests method
+    """
 
     def __init__(self, method):
         self.method = method.upper()
@@ -140,14 +149,14 @@ class HostAndPathMatches(PathMatches):
 
         # Truncate the ".storyscriptapp.com" from "foo.asyncyapp.com" and
         # ignore ports for local debugging
-        host = request.host.split(":")[0]
+        host = request.host.split(':')[0]
 
-        if host[:-(Config.PRIMARY_DOMAIN_LEN + 1)] == self.host.split(":")[0]:
+        if host[:-(Config.PRIMARY_DOMAIN_LEN + 1)] == self.host.split(':')[0]:
 
             # This avoids the need for regex when the
             # path_pattern is exactly the same as the
             # request path.
-            safe_path = request.path.split("?")[0]
+            safe_path = request.path.split('?')[0]
             safe_pattern = str(self.path_pattern)
 
             if safe_path in safe_pattern:
@@ -155,7 +164,7 @@ class HostAndPathMatches(PathMatches):
                     return {}
                 elif safe_pattern.endswith('/') and \
                         safe_pattern.startswith(safe_path) and \
-                        not safe_path.endswith("/") and \
+                        not safe_path.endswith('/') and \
                         safe_pattern == (safe_path + '/'):
                     self.match_cache[request.path] = {}
 

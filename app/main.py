@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 
 import os
-from tornado import ioloop
-from tornado.web import Application
-from tornado.httpclient import AsyncHTTPClient
-from tornado.options import define, options
+
 from raven.contrib.tornado import AsyncSentryClient
 
-from .Router import Router
+from tornado import ioloop
+from tornado.httpclient import AsyncHTTPClient
+from tornado.options import define, options
+from tornado.web import Application
 
 from . import handlers
+from .Router import Router
 
 
 define('debug', default=False, help='enable debug')
@@ -58,7 +59,9 @@ if __name__ == '__main__':
 
     router = Router(options.routes_file)
 
-    AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient", max_clients=60)
+    AsyncHTTPClient.configure(
+        'tornado.curl_httpclient.CurlAsyncHTTPClient', max_clients=60
+    )
 
     external_app = make_external_app(router)
     external_app.listen(options.external_port)

@@ -31,9 +31,9 @@ setup(
     setup_requires=['pytest-runner'],
     python_requires='>=3.7',
     install_requires=[
-        "tornado==5.0.2",
-        "raven==6.9.0",
-        "ujson==1.35"
+        'tornado==5.0.2',
+        'raven==6.9.0',
+        'ujson==1.35'
     ],
     classifiers=[
         'Environment :: Console',

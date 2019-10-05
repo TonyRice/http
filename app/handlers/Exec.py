@@ -85,7 +85,7 @@ class ExecHandler(SentryMixin, RequestHandler):
 
         try:
             yield self.execute_request(url, event)
-        except:
+        except Exception:
             import traceback
 
             traceback.print_exc()
@@ -171,14 +171,14 @@ class ExecHandler(SentryMixin, RequestHandler):
             filename_bytes = file.name.encode()
             upload_name_bytes = file.upload_name.encode()
             buf = (
-                (b'--%s\r\n' % boundary_bytes)
-                + (
+                (b'--%s\r\n' % boundary_bytes) +
+                (
                     b'Content-Disposition: form-data; '
-                    b'name="%s"; filename="%s"\r\n'
-                    % (upload_name_bytes, filename_bytes)
-                )
-                + (b'Content-Type: %s\r\n' % file.content_type.encode())
-                + b'\r\n'
+                    b'name="%s"; filename="%s"\r\n' %
+                    (upload_name_bytes, filename_bytes)
+                ) +
+                (b'Content-Type: %s\r\n' % file.content_type.encode()) +
+                b'\r\n'
             )
             yield write(buf)
 

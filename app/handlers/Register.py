@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from json import loads
+
 from raven.contrib.tornado import SentryMixin
-from tornado.web import RequestHandler, HTTPError
+
+from tornado.web import RequestHandler
 
 
 class RegisterHandler(SentryMixin, RequestHandler):
