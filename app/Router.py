@@ -28,6 +28,10 @@ path_re = re.compile(
 # match without regex to speed up processing
 path_matcher = re.compile('^([A-Za-z0-9-._~()\'!@,;_/]+)$')
 
+wild_matcher = re.compile(
+    "^(?P<wildcard>[A-Za-z0-9-._~()\\'!*:@,;_/]+)?(?P<endpath>/)?$"
+)
+
 match_wild_re = r'(?P<wildcard>[A-Za-z0-9-._~()\'!*:@,;_/]+)?'
 
 
@@ -153,6 +157,25 @@ class HostAndPathMatches(PathMatches):
 
         if host[:-(Config.PRIMARY_DOMAIN_LEN + 1)] == self.host.split(':')[0]:
 
+            # we know it's a wildcard match,
+            # so let's just go ahead and speed things up
+            if self.path_pattern is wild_matcher:
+                return {
+                    'path_args': [],
+                    'path_kwargs': {
+                        'wildcard': request.path.encode(),
+                        'endpath': None
+                    }
+                }
+
+            request_key = (self.host + request.path)
+
+            # below we override the super, and implement
+            # our own map based cache. This helps us
+            # save a few ms from caching
+            if request_key in self.match_cache:
+                return self.match_cache[request_key]
+
             # This avoids the need for regex when the
             # path_pattern is exactly the same as the
             # request path.
@@ -166,20 +189,17 @@ class HostAndPathMatches(PathMatches):
                         safe_pattern.startswith(safe_path) and \
                         not safe_path.endswith('/') and \
                         safe_pattern == (safe_path + '/'):
-                    self.match_cache[request.path] = {}
+                    self.match_cache[request_key] = {}
 
                     return {}
 
-            # below we override the super, and implement
-            # our own map based cache. This helps us
-            # save a few ms from caching
-            if request.path in self.match_cache:
-                return self.match_cache[request.path]
-
             value = super().match(request)
 
-            # this will make life a lot easier when speding data up
-            self.match_cache[request.path] = value
+            # we don't store anything for wildcard matched
+            # routes. We do this so we don't fill up the
+            # memory via malicious requests
+            if '?P<wildcard>' not in str(self.path_pattern):
+                self.match_cache[request_key] = value
 
             return value
 
