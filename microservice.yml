@@ -115,7 +115,7 @@ actions:
               arguments:
                 content:
                   help: The content from which the JSON response will be built.
-                  type: string
+                  type: any
                   in: responseBody
                   required: true
             redirect:
