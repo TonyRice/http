@@ -99,13 +99,25 @@ actions:
                 use_event_conn: true
               arguments:
                 content:
+                  help: The response content.
                   type: string
                   in: responseBody
                   required: true
                 flush:
+                  help: Parameter which decides whether to flush the response.
                   type: boolean
                   in: responseBody
                   required: false
+            writeJSON:
+              help: Write a JSON response body.
+              http:
+                <<: *response_http
+              arguments:
+                content:
+                  help: The content from which the JSON response will be built.
+                  type: string
+                  in: responseBody
+                  required: true
             redirect:
               help: Redirect the incoming URL. No additional actions may be used after executing this command.
               http:

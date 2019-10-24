@@ -243,6 +243,11 @@ class ExecHandler(SentryMixin, RequestHandler):
                     self.write(ins['data']['content'])
                 if ins['data'].get('flush'):
                     self.flush()
+            elif command == 'writeJSON':
+                self.set_header('Content-Type',
+                                'application/json; charset=utf-8')
+                self.write(json.dumps(ins['data']['content']))
+                self.flush()
             elif command == 'set_status':
                 self.set_status(ins['data']['code'])
             elif command == 'set_cookie':
