@@ -22,7 +22,7 @@ actions:
       method: post
     arguments:
       method: &method
-        type: string
+        type: enum
         in: requestBody
         default: get
         enum:
