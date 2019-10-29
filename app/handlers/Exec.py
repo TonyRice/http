@@ -27,7 +27,7 @@ class ExecHandler(SentryMixin, RequestHandler):
     response_passthrough = True
 
     def prepare(self):
-        self.set_header('Server', 'Asyncy')
+        self.set_header('Server', 'Storyscript')
 
     def resolve_by_uri(self, path):
         """
@@ -208,7 +208,7 @@ class ExecHandler(SentryMixin, RequestHandler):
         """
         Chunk examples that come from the Engine
             set_status 200
-            set_header {"name":"X-Data", "value":"Asyncy"}
+            set_header {"name":"X-Data", "value":"Storyscript"}
             write Hello, world
             ~finish~ will not be passed since it will close the connection
         """
