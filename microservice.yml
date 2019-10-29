@@ -90,7 +90,7 @@ actions:
               help: The URI of the incoming HTTP request
               type: string
             path:
-              help: The path portion of th URI of the incoming HTTP request
+              help: The path portion of the URI of the incoming HTTP request
               type: string
           actions:
             write:
