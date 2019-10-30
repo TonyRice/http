@@ -84,14 +84,36 @@ actions:
               help: The HTTP headers of the incoming HTTP request
               type: map
             query_params:
+              help: |
+                DEPRECATED. Use 'queryParams'.
+              type: map
+              map:
+                keys:
+                  type: string
+                values:
+                  type: string
+            queryParams:
               help: The parsed query parameters of the HTTP request
               type: map
+              map:
+                keys:
+                  type: string
+                values:
+                  type: string
             uri:
               help: The URI of the incoming HTTP request
               type: string
             path:
               help: The path portion of the URI of the incoming HTTP request
               type: string
+            formFields:
+              help: The form fields of the incoming HTTP request
+              type: map
+              map:
+                keys:
+                  type: string
+                values:
+                  type: string
             files:
               type: map
               map:
