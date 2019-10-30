@@ -90,8 +90,30 @@ actions:
               help: The URI of the incoming HTTP request
               type: string
             path:
-              help: The path portion of th URI of the incoming HTTP request
+              help: The path portion of the URI of the incoming HTTP request
               type: string
+            files:
+              type: map
+              map:
+                keys:
+                  type: string
+                  help: File name in the request
+                values:
+                  type: object
+                  help: Individual file object
+                  properties:
+                    name:
+                      help: File name in the request
+                      type: string
+                    body:
+                      help: Raw source of this file
+                      type: string
+                    filename:
+                      help: Original local file name
+                      type: string
+                    contentType:
+                      help: Content-Type of the file object
+                      type: string
           actions:
             write:
               http: &response_http
