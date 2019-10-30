@@ -60,9 +60,19 @@ class ExecHandler(SentryMixin, RequestHandler):
             },
         }
 
+        # TODO: deprecate query_params once OMS supports deprecation
+        # https://github.com/microservices/openmicroservices.org/pull/142
         event['data']['query_params'] = {}
         for k, v in self.request.arguments.items():
             event['data']['query_params'][k] = v[0].decode('utf-8')
+
+        event['data']['queryParams'] = {}
+        for k, v in self.request.query_arguments.items():
+            event['data']['queryParams'][k] = v[0].decode('utf-8')
+
+        event['data']['formFields'] = {}
+        for k, v in self.request.body_arguments.items():
+            event['data']['formFields'][k] = v[0].decode('utf-8')
 
         if 'application/json' in self.request.headers.get('content-type', ''):
             event['data']['body'] = json.loads(
