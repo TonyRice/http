@@ -132,9 +132,10 @@ class ExecHandler(SentryMixin, RequestHandler):
             }
             files = self._get_request_files()
             self._insert_event_as_file(event, files)
-            producer = partial(self.multipart_producer, files, boundary)
             kwargs['headers'] = headers
-            kwargs['body_producer'] = producer
+            # body_producer is NOT supported for the curl_httpclient
+            # https://github.com/tornadoweb/tornado/issues/2096
+            kwargs['body'] = b''.join(self.multipart_producer(files, boundary))
 
         kwargs['headers']['Connection'] = 'keep-alive'
         request = tornado.httpclient.HTTPRequest(**kwargs)
@@ -168,8 +169,7 @@ class ExecHandler(SentryMixin, RequestHandler):
                 )
         return all_files
 
-    @coroutine
-    def multipart_producer(self, files: typing.List[File], boundary, write):
+    def multipart_producer(self, files: typing.List[File], boundary):
         """
         Inspired directly from here:
         https://github.com/tornadoweb/tornado/blob/master/demos/file_upload/file_uploader.py
@@ -189,15 +189,15 @@ class ExecHandler(SentryMixin, RequestHandler):
                 + (b'Content-Type: %s\r\n' % file.content_type.encode())
                 + b'\r\n'
             )
-            yield write(buf)
+            yield buf
 
             # We only write bytes.
             assert isinstance(file.body, bytes)
-            yield write(file.body)
+            yield file.body
 
-            yield write(b'\r\n')
+            yield b'\r\n'
 
-        yield write(b'--%s--\r\n' % (boundary_bytes,))
+        yield b'--%s--\r\n' % (boundary_bytes,)
 
     def _on_headers_receive(self, header_line: str):
         """
