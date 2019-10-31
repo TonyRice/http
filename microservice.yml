@@ -176,19 +176,35 @@ actions:
                   type: map
                   in: responseBody
             flush:
+              help: Flushes the current output buffer to the network.
               http:
                 <<: *response_http
-            get_header:
+            header:
+              help: Set an HTTP header
               http:
                 <<: *response_http
               arguments:
-                key:
+                name:
                   type: string
+                  in: responseBody
+                  required: true
+                value:
+                  type: string
+                  in: responseBody
+                  required: true
+            status:
+              help: Set an HTTP status code.
+              http:
+                <<: *response_http
+              arguments:
+                code:
+                  type: int
                   in: responseBody
                   required: true
             set_header:
               http:
                 <<: *response_http
+              help: DEPRECATED. Use 'header'
               arguments:
                 key:
                   type: string
@@ -201,11 +217,13 @@ actions:
             set_status:
               http:
                 <<: *response_http
+              help: DEPRECATED. Use 'status'
               arguments:
                 code:
                   type: int
                   in: responseBody
                   required: true
             finish:
+              help: Finish a response and send it to the client.
               http:
                 <<: *response_http
