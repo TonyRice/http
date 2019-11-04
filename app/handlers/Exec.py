@@ -27,7 +27,7 @@ class ExecHandler(SentryMixin, RequestHandler):
     response_passthrough = True
 
     def prepare(self):
-        self.set_header('Server', 'Asyncy')
+        self.set_header('Server', 'Storyscript')
 
     def resolve_by_uri(self, path):
         """
@@ -60,9 +60,19 @@ class ExecHandler(SentryMixin, RequestHandler):
             },
         }
 
+        # TODO: deprecate query_params once OMS supports deprecation
+        # https://github.com/microservices/openmicroservices.org/pull/142
         event['data']['query_params'] = {}
         for k, v in self.request.arguments.items():
             event['data']['query_params'][k] = v[0].decode('utf-8')
+
+        event['data']['queryParams'] = {}
+        for k, v in self.request.query_arguments.items():
+            event['data']['queryParams'][k] = v[0].decode('utf-8')
+
+        event['data']['formFields'] = {}
+        for k, v in self.request.body_arguments.items():
+            event['data']['formFields'][k] = v[0].decode('utf-8')
 
         if 'application/json' in self.request.headers.get('content-type', ''):
             event['data']['body'] = json.loads(
@@ -122,9 +132,10 @@ class ExecHandler(SentryMixin, RequestHandler):
             }
             files = self._get_request_files()
             self._insert_event_as_file(event, files)
-            producer = partial(self.multipart_producer, files, boundary)
             kwargs['headers'] = headers
-            kwargs['body_producer'] = producer
+            # body_producer is NOT supported for the curl_httpclient
+            # https://github.com/tornadoweb/tornado/issues/2096
+            kwargs['body'] = b''.join(self.multipart_producer(files, boundary))
 
         kwargs['headers']['Connection'] = 'keep-alive'
         request = tornado.httpclient.HTTPRequest(**kwargs)
@@ -158,8 +169,7 @@ class ExecHandler(SentryMixin, RequestHandler):
                 )
         return all_files
 
-    @coroutine
-    def multipart_producer(self, files: typing.List[File], boundary, write):
+    def multipart_producer(self, files: typing.List[File], boundary):
         """
         Inspired directly from here:
         https://github.com/tornadoweb/tornado/blob/master/demos/file_upload/file_uploader.py
@@ -179,15 +189,15 @@ class ExecHandler(SentryMixin, RequestHandler):
                 + (b'Content-Type: %s\r\n' % file.content_type.encode())
                 + b'\r\n'
             )
-            yield write(buf)
+            yield buf
 
             # We only write bytes.
             assert isinstance(file.body, bytes)
-            yield write(file.body)
+            yield file.body
 
-            yield write(b'\r\n')
+            yield b'\r\n'
 
-        yield write(b'--%s--\r\n' % (boundary_bytes,))
+        yield b'--%s--\r\n' % (boundary_bytes,)
 
     def _on_headers_receive(self, header_line: str):
         """
@@ -208,7 +218,7 @@ class ExecHandler(SentryMixin, RequestHandler):
         """
         Chunk examples that come from the Engine
             set_status 200
-            set_header {"name":"X-Data", "value":"Asyncy"}
+            set_header {"name":"X-Data", "value":"Storyscript"}
             write Hello, world
             ~finish~ will not be passed since it will close the connection
         """
@@ -243,7 +253,13 @@ class ExecHandler(SentryMixin, RequestHandler):
                     self.write(ins['data']['content'])
                 if ins['data'].get('flush'):
                     self.flush()
-            elif command == 'set_status':
+            elif command == 'writeJSON':
+                self.set_header('Content-Type',
+                                'application/json; charset=utf-8')
+                self.write(json.dumps(ins['data']['content']))
+                self.flush()
+            # 'set_status' is deprecated
+            elif command == 'setStatus' or command == 'set_status':
                 self.set_status(ins['data']['code'])
             elif command == 'set_cookie':
                 # name, value, domain, expires, path, expires_days, secure
@@ -257,8 +273,14 @@ class ExecHandler(SentryMixin, RequestHandler):
             elif command == 'clear_all_cookie':
                 # domain, path
                 self.clear_cookie(**ins['data'])
-            elif command == 'set_header':
-                self.set_header(ins['data']['key'], ins['data']['value'])
+            # 'set_header' is deprecated
+            elif command == 'addHeader' or command == 'set_header':
+                if 'name' in ins['data']:
+                    name = ins['data']['name']
+                else:
+                    # support for deprecated 'key'
+                    ins['data']['key']
+                self.set_header(name, ins['data']['value'])
             elif command == 'flush':
                 self.flush()
             elif command == 'redirect':

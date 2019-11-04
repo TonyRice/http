@@ -1,4 +1,4 @@
-# Asyncy HTTP Gateway
+# Storyscript HTTP Gateway
 
 API gateway server for executing Stories via HTTP.
 
@@ -54,7 +54,6 @@ Now access that endpoint
 ```shell
 curl -X POST -d 'foobar' -H "Host: a.storyscriptapp.com" http://localhost:8888/ping
 ```
-
 
 ### Unregister an endpoint
 
