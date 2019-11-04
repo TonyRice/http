@@ -55,7 +55,6 @@ Now access that endpoint
 curl -X POST -d 'foobar' -H "Host: a.storyscriptapp.com" http://localhost:8888/ping
 ```
 
-
 ### Unregister an endpoint
 
 ```shell
