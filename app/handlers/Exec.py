@@ -259,7 +259,7 @@ class ExecHandler(SentryMixin, RequestHandler):
                 self.write(json.dumps(ins['data']['content']))
                 self.flush()
             # 'set_status' is deprecated
-            elif command == 'status' or command == 'set_status':
+            elif command == 'setStatus' or command == 'set_status':
                 self.set_status(ins['data']['code'])
             elif command == 'set_cookie':
                 # name, value, domain, expires, path, expires_days, secure
@@ -274,7 +274,7 @@ class ExecHandler(SentryMixin, RequestHandler):
                 # domain, path
                 self.clear_cookie(**ins['data'])
             # 'set_header' is deprecated
-            elif command == 'header' or command == 'set_header':
+            elif command == 'addHeader' or command == 'set_header':
                 if 'name' in ins['data']:
                     name = ins['data']['name']
                 else:

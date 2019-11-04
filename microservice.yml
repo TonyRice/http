@@ -179,8 +179,8 @@ actions:
               help: Flushes the current output buffer to the network.
               http:
                 <<: *response_http
-            header:
-              help: Set an HTTP header
+            addHeader:
+              help: Add an HTTP header.
               http:
                 <<: *response_http
               arguments:
@@ -192,7 +192,7 @@ actions:
                   type: string
                   in: responseBody
                   required: true
-            status:
+            setStatus:
               help: Set an HTTP status code.
               http:
                 <<: *response_http
@@ -204,7 +204,7 @@ actions:
             set_header:
               http:
                 <<: *response_http
-              help: DEPRECATED. Use 'header'
+              help: DEPRECATED. Use 'header'.
               arguments:
                 key:
                   type: string
@@ -217,7 +217,7 @@ actions:
             set_status:
               http:
                 <<: *response_http
-              help: DEPRECATED. Use 'status'
+              help: DEPRECATED. Use 'status'.
               arguments:
                 code:
                   type: int
