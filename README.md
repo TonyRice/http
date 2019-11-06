@@ -4,12 +4,12 @@ API gateway server for executing Stories via HTTP.
 
 ```coffee
 http server as server
-  when server listen method:'get' path:'/' as r
-    log info msg:r.body
-    log info msg:r.headers
-    log info msg:r.headers['Host']
-    r write data:'Hello World'
-    r status code:200
+  when server listen method:"post" path:"/" as r
+    log info msg:(r.body to string)
+    log info msg:(r.headers to string)
+    log info msg:r.headers["Host"]
+    r write content:"Hello World"
+    r setStatus code:200
     r finish
 ```
 
